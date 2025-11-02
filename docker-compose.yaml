@@ -1,0 +1,122 @@
+services:
+
+     # MongoDB - Base de datos
+  mongodb:
+    image: mongo:8
+    container_name: movies-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: moviesdb
+    networks:
+      - movies-network
+    restart: unless-stopped
+
+
+  # RabbitMQ - Sistema de mensajería
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: movies-rabbitmq
+    ports:
+      - "5672:5672"    # Puerto AMQP
+      - "15672:15672"  # Puerto Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - movies-network
+
+ # Microservicio Movies
+  movies:
+    build: ./Movies
+    container_name: movies-service
+    ports:
+      - "3002:3002"
+    environment:
+      PORT: 3002
+      MONGO_URI: mongodb://movies-mongodb:27017/moviesdb
+    depends_on:
+      - mongodb
+    networks:
+      - movies-network
+    restart: unless-stopped
+
+
+
+  # Microservicio RandomMovies
+  random-movies:
+    build: ./RandomMovies
+    container_name: movies-random
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      MOVIES_SERVICE_URL: http://movies:3002
+    depends_on:
+      - movies
+    networks:
+      - movies-network
+    restart: unless-stopped
+
+  # Microservicio Calificación
+  calificacion:
+    build: ./Califications
+    container_name: movies-calificacion
+    ports:
+      - "3003:3003"
+    environment:
+      PORT: 3003
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - movies-network
+    restart: unless-stopped
+
+     # Microservicio opinion
+  opinions:
+    build: ./Opinions
+    container_name: movies-opinions
+    ports:
+      - "3004:3004"
+    environment:
+      PORT: 3004
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      MONGO_URI: mongodb://movies-mongodb:27017/moviesdb
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - movies-network
+    restart: unless-stopped
+
+
+  # Frontend - Using http-server to serve production build
+  frontend:
+    build:
+      context: ./Frontend
+      dockerfile: Dockerfile
+    container_name: movies-frontend
+    environment:
+        CALIFICATIONS_URL: http://calificacion:3003
+    ports:
+      - "80:8080"  # Expose http-server on port 80
+    restart: unless-stopped
+    networks:
+      - movies-network
+
+networks:
+  movies-network:
+    driver: bridge
+
+
+volumes:
+  mongodb_data:

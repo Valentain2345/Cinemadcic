@@ -1,0 +1,73 @@
+# Node modules
+*/node_modules/
+
+# Vite build output
+*/dist/
+
+# Vite development cache
+*/.vite/
+
+# TypeScript compilation output
+*/tsconfig.tsbuildinfo
+
+# npm logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Docker & Docker Compose files
+.docker/
+docker-compose.override.yml
+docker-compose*.yml
+Dockerfile*
+
+# MongoDB data (if running locally)
+data/
+
+# .env files (local development environment variables)
+.env
+.env.local
+.env.*.local
+
+# VSCode settings
+.vscode/
+
+# macOS specific
+.DS_Store
+
+# Windows specific
+Thumbs.db
+
+# JetBrains IDEs
+.idea/
+
+# Logs
+*.log
+
+# Temporary files
+*.swp
+*.swo
+*.bak
+*.tmp
+
+# Coverage reports
+*/coverage/
+
+# Testing / snapshot files
+*.test.js*
+*.test.ts*
+*.snap
+
+# Build artifacts
+*/build/
+*.tgz
+
+# Package-lock
+*/package-lock.json
+
+# Pnpm
+.pnpm/
+
+# System files
+*.pid
+*.seed
