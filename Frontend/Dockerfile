@@ -12,6 +12,7 @@ RUN npm install --only=production
 
 # Install TypeScript for the build step
 RUN npm install -g typescript
+RUN npm install @types/node vite
 
 # Copy the rest of the app's source code
 COPY . .
