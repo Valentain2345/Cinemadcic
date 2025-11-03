@@ -10,6 +10,9 @@ COPY package*.json ./
 # Install dependencies
 RUN npm install --only=production
 
+# Install TypeScript for the build step
+RUN npm install -g typescript
+
 # Copy the rest of the app's source code
 COPY . .
 
