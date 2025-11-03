@@ -63,7 +63,7 @@ Thumbs.db
 *.tgz
 
 # Package-lock
-*/package-lock.json
+#/package-lock.json
 
 # Pnpm
 .pnpm/
