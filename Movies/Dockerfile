@@ -1,36 +1,19 @@
-# movies-service/Dockerfile
-FROM node:18-alpine
+# Use Node 22 for best performance and security
+FROM node:22-alpine
 
 WORKDIR /app
 
-# Copiar package.json y package-lock.json
+# Copy dependency files first (for better layer caching)
 COPY package*.json ./
 
-# Instalar dependencias
+# Install only production dependencies
 RUN npm ci --only=production
 
-# Copiar el código fuente
+# Copy the rest of the source code
 COPY . .
 
-# Exponer el puerto
+# Expose the service port
 EXPOSE 3002
 
-# Comando para iniciar la aplicación
-FROM node:18-alpine
-
-WORKDIR /app
-
-# Copy package.json and package-lock.json
-COPY package*.json ./
-
-# Install dependencies
-RUN npm ci --only=production
-
-# Copy the application code
-COPY . .
-
-# Expose the port for the application
-EXPOSE 3002
-
-# Run the seed script first, then start the server
-CMD ["sh", "-c", "node server.js && node seed.js"]
+# Seed the database, then start the server
+CMD ["sh", "-c", "node seed.js && node server.js"]
