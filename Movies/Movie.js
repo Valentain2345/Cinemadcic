@@ -1,13 +1,10 @@
+import { MongoClient } from "mongodb";
 
-import mongoose from 'mongoose';
+const targetUri = process.env.MONGO_URI||"mongodb://localhost:27017/movies"
+const targetClient = new MongoClient(targetUri);
+const targetDbName = "movies";
+const targetCollectionName = "movies";
+const targetDb = targetClient.db(targetDbName);
+const MovieCollection = targetDb.collection(targetCollectionName);
 
-const movieSchema = new mongoose.Schema({
-  id: { type: Number, unique: true },
-  title: { type: String, required: true },
-  plot: { type: String, required: true },
-  year: { type: Number, required: true },
-  genre: { type: String, required: true },
-  director: { type: String, required: true },
-}, { timestamps: true });
-
-export default mongoose.model('Movie', movieSchema);
+export default MovieCollection

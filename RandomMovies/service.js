@@ -9,6 +9,9 @@ const PORT = process.env.PORT || 3001;
 // URL del microservicio Movies
 const MOVIES_SERVICE_URL = process.env.MOVIES_SERVICE_URL || 'http://localhost:3002';
 
+// Cantidad total estimada de películas (debes ajustarlo si cambia)
+const MOVIE_NUMBER = 21349;
+
 app.use(cors());
 app.use(express.json());
 
@@ -19,16 +22,24 @@ app.get('/random-movies', async (req, res) => {
 
     console.log(`[RandomMovies] Solicitando ${count} películas aleatorias...`);
 
-    // Obtener todas las películas del microservicio Movies
-    const response = await axios.get(`${MOVIES_SERVICE_URL}/api/movies`);
-    const allMovies = response.data;
+    // Calculate random offset so the DB fetches a random slice
+    const offset = Math.max(0, Math.floor(Math.random() * (MOVIE_NUMBER - count)));
+    const limit = count * 2; // Fetch extra to improve randomness
 
-    // Seleccionar películas al azar
-    const randomMovies = getRandomMovies(allMovies, count);
+    // Fetch using offset & limit
+    const response = await axios.get(`${MOVIES_SERVICE_URL}/api/movies`, {
+      params: { offset, limit }
+    });
 
-    console.log(`[RandomMovies] Devolviendo ${randomMovies.length} películas`);
+    const movies = response.data;
+
+    // Pick random subset
+    const randomMovies = pickRandomSubset(movies, count);
+
+    console.log(`[RandomMovies] Devolviendo ${randomMovies.length} películas (offset=${offset}, limit=${limit})`);
 
     res.json(randomMovies);
+
   } catch (error) {
     console.error('[RandomMovies] Error:', error.message);
     res.status(500).json({
@@ -38,10 +49,12 @@ app.get('/random-movies', async (req, res) => {
   }
 });
 
-// Función para seleccionar películas aleatorias
-function getRandomMovies(movies, count) {
-  const shuffled = [...movies].sort(() => 0.5 - Math.random());
-  return shuffled.slice(0, Math.min(count, movies.length));
+// Select N random movies from a list
+function pickRandomSubset(list, count) {
+  if (list.length <= count) return list;
+
+  const shuffled = [...list].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
 }
 
 // Health check

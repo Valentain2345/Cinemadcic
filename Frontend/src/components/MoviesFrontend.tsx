@@ -1,3 +1,9 @@
+// Prevent Vite HMR from reloading component on scroll updates
+if (import.meta.hot) {
+  import.meta.hot.accept(() => {});
+}
+
+
 import { useState, useEffect } from 'react';
 import styled, { keyframes } from 'styled-components';
 import { Star, Film, Loader2, ThumbsUp, RefreshCw } from 'lucide-react';
@@ -6,11 +12,21 @@ interface Movie {
   id: number;
   title: string;
   plot: string;
+  fullplot?: string;
   year: number;
-  genre: string;
+  genres?: string[];
+  directors?: string[];
+  cast?: string[];
+  runtime?: number;
+  languages?: string[];
+  poster?: string;
   rating?: number;
-  director?:string;
+  tomatoes?: {
+    viewer?: { rating?: number };
+    critic?: { rating?: number };
+  };
 }
+
 
 // Keyframes
 const fadeIn = keyframes`
@@ -130,8 +146,10 @@ const MovieCard = styled.div`
 `;
 
 const CardImage = styled.div`
-  height: 180px;
-  background: linear-gradient(135deg, #1e40af, #7c3aed);
+  height: 240px;
+  background-color: #1e293b;
+  background-size: cover;
+  background-position: center;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -219,22 +237,22 @@ const ModalContent = styled.div`
   border-radius: 1.5rem;
   max-width: 600px;
   width: 100%;
+  max-height: 90vh;          /* <-- prevents overflow */
   border: 1px solid rgba(59, 130, 246, 0.3);
   overflow: hidden;
   animation: ${fadeIn} 0.4s ease-out;
+
+  display: flex;             /* <-- lets body scroll */
+  flex-direction: column;
 `;
 
-const ModalImage = styled.div`
-  height: 200px;
-  background: linear-gradient(135deg, #1e40af, #7c3aed);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-`;
 
 const ModalBody = styled.div`
   padding: 2rem;
+  overflow-y: auto;          /* <-- enable scroll */
+  flex: 1;                   /* <-- take available space */
 `;
+
 
 const ModalTitle = styled.h2`
   font-size: 2rem;
@@ -403,6 +421,56 @@ export default function MoviesFrontend() {
   const [movieComment,setMovieComment]=useState<string>("");
   const [tempRating, setTempRating] = useState<number>(0);
 
+
+ useEffect(() => {
+  const handleScroll = () => {
+    const bottom =
+      window.innerHeight + window.scrollY >=
+      document.body.offsetHeight - 200;
+
+    if (bottom && !loading) {
+      loadMoreMovies();
+    }
+  };
+
+  window.addEventListener("scroll", handleScroll);
+  return () => window.removeEventListener("scroll", handleScroll);
+}, []); // IMPORTANT: empty dependency array
+
+
+const loadMoreMovies = async () => {
+  try {
+    setLoading(true);
+
+    const existingIds = new Set(movies.map((m) => m.id));
+
+    let uniqueNewMovies: Movie[] = [];
+
+    // Try up to 5 times to get unique movies
+    for (let i = 0; i < 5 && uniqueNewMovies.length === 0; i++) {
+      const response = await fetch(
+        `http://localhost:3001/random-movies?count=5`
+      );
+      const fetched: Movie[] = await response.json();
+
+      uniqueNewMovies = fetched.filter(m => !existingIds.has(m.id));
+    }
+
+    // Add unique movies to the end
+    if (uniqueNewMovies.length > 0) {
+      setMovies(prev => [...prev, ...uniqueNewMovies]);
+    } else {
+      console.warn("No new unique movies found after several attempts.");
+    }
+
+  } catch (error) {
+    console.error("Error loading more movies:", error);
+  } finally {
+    setLoading(false);
+  }
+};
+
+
   const fetchRandomMovies = async (count = 7) => {
     setLoading(true);
     try {
@@ -561,8 +629,11 @@ const StarRating = ({
 
     {/* Centered content */}
     <Main>
-      <div className="flex justify-between items-center mb-8">
-        <SectionTitle>Películas Aleatorias</SectionTitle>
+     <div
+  className="flex justify-between items-center"
+  style={{ marginBottom: "1.75rem" }}
+>
+   <SectionTitle>Películas Aleatorias</SectionTitle>
         <RefreshButton onClick={() => fetchRandomMovies(7)} disabled={loading}>
           {loading ? (
             <>
@@ -578,97 +649,166 @@ const StarRating = ({
         </RefreshButton>
       </div>
 
-      {loading ? (
-        <LoaderWrapper>
-          <Spinner size={48} />
-        </LoaderWrapper>
-      ) : (
+
         <MoviesGrid>
   {movies.map((movie) => (
     <MovieCard key={movie.id} onClick={() => setSelectedMovie(movie)}>
-      <CardImage>
-        <Film size={64} className="text-white/40" />
-      </CardImage>
-      <CardContent>
-        <MovieTitle>{movie.title}</MovieTitle>
-        <Tags>
-          <Tag color="blue">{movie.year}</Tag>
-          <Tag color="purple">{movie.genre}</Tag>
-        </Tags>
-        <Plot>{movie.plot}</Plot>
-        <RatingLabel>Tu calificación:</RatingLabel>
-        {/* Modo automático: envía al hacer clic */}
-        <StarRating movieId={movie.id} currentRating={movie.rating} mode="auto" />
-      </CardContent>
-    </MovieCard>
+      <CardImage style={{
+    backgroundImage: movie.poster ? `url(${movie.poster})` : undefined,
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+  }}>
+    {!movie.poster && <Film size={64} className="text-white/40" />}
+  </CardImage>
+
+  <CardContent>
+    <MovieTitle>{movie.title}</MovieTitle>
+
+    <Tags>
+      <Tag color="blue">{movie.year}</Tag>
+
+      {movie.genres?.slice(0, 2).map((g) => (
+        <Tag key={g} color="purple">{g}</Tag>
+      ))}
+    </Tags>
+
+    <Plot>{movie.plot}</Plot>
+
+    {movie.directors?.length ? (
+  <RatingLabel>Dirigida por: {movie.directors.join(", ")}</RatingLabel>
+) : null}
+
+
+    {movie.cast?.length ? (
+  <RatingLabel>
+    Reparto: {movie.cast.slice(0, 3).join(", ")}
+    {movie.cast.length > 3 ? "…" : ""}
+  </RatingLabel>
+) : null}
+
+
+    {movie.runtime && (
+      <RatingLabel>Duración: {movie.runtime} min</RatingLabel>
+    )}
+
+    <RatingLabel>Tu calificación:</RatingLabel>
+    <StarRating movieId={movie.id} currentRating={movie.rating} mode="auto" />
+  </CardContent>
+</MovieCard>
+
   ))}
 </MoviesGrid>
-      )}
+
+{loading && (
+  <LoaderWrapper>
+    <Spinner size={32} />
+  </LoaderWrapper>
+)}
+
+
+
     </Main>
 
     {/* Modal remains full-screen */}
    {selectedMovie && (
   <ModalOverlay onClick={handleCloseModal}>
     <ModalContent onClick={(e) => e.stopPropagation()}>
-      <ModalImage>
-        <Film size={96} className="text-white/40" />
-      </ModalImage>
+    <CardImage style={{
+    backgroundImage: selectedMovie.poster ? `url(${selectedMovie.poster})` : undefined,
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+  }}>
+    {!selectedMovie.poster && <Film size={96} className="text-white/40" />}
+  </CardImage>
+
       <ModalBody>
-        <ModalTitle>{selectedMovie.title}</ModalTitle>
-        <ModalTags>
-          <Tag color="blue">{selectedMovie.year}</Tag>
-          <Tag color="purple">{selectedMovie.genre}</Tag>
-        </ModalTags>
-        <SynopsisTitle>Sinopsis</SynopsisTitle>
-        <Synopsis>{selectedMovie.plot}</Synopsis>
-         <RatingLabel>Director: {selectedMovie.director}</RatingLabel>
-        <RatingLabel>Califica esta película:</RatingLabel>
-        {/* Modo manual: solo guarda, no envía */}
-        <StarRating
-          movieId={selectedMovie.id}
-          currentRating={selectedMovie.rating}
-          mode="manual"
-        />
+  <ModalTitle>{selectedMovie.title}</ModalTitle>
 
-        <CommentSection>
-          <CommentLabel htmlFor="movie-comment">
-            Comentario (opcional)
-          </CommentLabel>
-          <CommentTextarea
-            id="movie-comment"
-            placeholder="Comparte tu opinión sobre esta película..."
-            value={movieComment}
-            onChange={(e) => {
-              const value = e.target.value;
-              if (value.length <= 200) {
-                setMovieComment(value);
-              }
-            }}
-            maxLength={200}
-          />
-          <CharacterCount $isNearLimit={movieComment.length >= 180}>
-            {movieComment.length}/200 caracteres
-          </CharacterCount>
-        </CommentSection>
+  <ModalTags>
+    <Tag color="blue">{selectedMovie.year}</Tag>
+    {selectedMovie.genres?.map((g) => (
+      <Tag key={g} color="purple">{g}</Tag>
+    ))}
+  </ModalTags>
 
-        <ButtonGroup>
-          <CancelButton onClick={handleCloseModal}>
-            Cancelar
-          </CancelButton>
-          <SubmitButton
-            onClick={() => {
-              if (tempRating > 0) {
-                submitRating(selectedMovie.id, tempRating);
-              } else {
-                showNotification('Por favor, califica la película primero');
-              }
-            }}
-            disabled={tempRating === 0}
-          >
-            Enviar Calificación
-          </SubmitButton>
-        </ButtonGroup>
-      </ModalBody>
+  {selectedMovie.directors?.length ? (
+  <RatingLabel>
+    <strong>Directores:</strong> {selectedMovie.directors.join(", ")}
+  </RatingLabel>
+) : null}
+
+
+ {selectedMovie.cast?.length ? (
+  <RatingLabel>
+    <strong>Reparto:</strong> {selectedMovie.cast.slice(0, 5).join(", ")}
+    {selectedMovie.cast.length > 5 ? "…" : ""}
+  </RatingLabel>
+) : null}
+
+
+  {selectedMovie.runtime && (
+    <RatingLabel>
+      <strong>Duración:</strong> {selectedMovie.runtime} min
+    </RatingLabel>
+  )}
+
+ {selectedMovie.languages?.length ? (
+  <RatingLabel>
+    <strong>Idiomas:</strong> {selectedMovie.languages.join(", ")}
+  </RatingLabel>
+) : null}
+
+
+  <SynopsisTitle>Sinopsis</SynopsisTitle>
+  <Synopsis>{selectedMovie.fullplot || selectedMovie.plot}</Synopsis>
+
+  <RatingLabel><strong>Califica esta película:</strong></RatingLabel>
+
+  <StarRating
+    movieId={selectedMovie.id}
+    currentRating={selectedMovie.rating}
+    mode="manual"
+  />
+
+  <CommentSection>
+    <CommentLabel htmlFor="movie-comment">
+      Comentario (opcional)
+    </CommentLabel>
+    <CommentTextarea
+      id="movie-comment"
+      placeholder="Comparte tu opinión sobre esta película..."
+      value={movieComment}
+      onChange={(e) => {
+        const value = e.target.value;
+        if (value.length <= 200) {
+          setMovieComment(value);
+        }
+      }}
+      maxLength={200}
+    />
+    <CharacterCount $isNearLimit={movieComment.length >= 180}>
+      {movieComment.length}/200 caracteres
+    </CharacterCount>
+  </CommentSection>
+
+  <ButtonGroup>
+    <CancelButton onClick={handleCloseModal}>Cancelar</CancelButton>
+
+    <SubmitButton
+      onClick={() => {
+        if (tempRating > 0) {
+          submitRating(selectedMovie.id, tempRating);
+        } else {
+          showNotification("Por favor, califica la película primero");
+        }
+      }}
+      disabled={tempRating === 0}
+    >
+      Enviar Calificación
+    </SubmitButton>
+  </ButtonGroup>
+</ModalBody>
+
     </ModalContent>
   </ModalOverlay>
 )}
