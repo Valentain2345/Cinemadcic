@@ -64,4 +64,10 @@ You should see the application running.
   docker-compose down
   ```
 
+### Recomendation System
+* It has two modes, cold start where it recommends the same top 10 movies for everyone and pesonalised where it uses the consine similarity to compute movies you might like
+
+
+  
+
 Enjoy using the application! 🚀
