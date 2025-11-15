@@ -16,7 +16,7 @@ Once Docker is installed, proceed with the steps below.
 First, run the following command to build the Docker images for the application:
 
 ```bash
-docker-compose build
+docker compose build
 ```
 
 > Wait for the build process to complete.
@@ -26,17 +26,18 @@ docker-compose build
 Once the build is complete, start the services in detached mode by running:
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 > This will start all the services in the background.
 
 ## 3. Verify the Services Are Running
 
-Wait a few moments for the services to become active. To verify they're running, you can check their status:
+Wait a few moments for the services to become active, the movies service will take a while to start because it copies 20k movies to the db so no random movies can be seen or search for them until it finishes copying them.
+To verify they're running, you can check their status:
 
 ```bash
-docker-compose ps
+docker compose ps
 ```
 
 ## 4. Access the Application

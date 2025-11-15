@@ -98,6 +98,27 @@ services:
       - movies-network
     restart: unless-stopped
 
+    # Microservicio Recomendaciones (Nuevo)
+  recomendations:
+    build:
+      context: ./Recommendations
+      dockerfile: Dockerfile
+    container_name: movies-recomendations
+    ports:
+      - "5000:5000"
+    environment:
+      MONGO_URI: mongodb://movies-mongodb:27017/moviesdb
+    depends_on:
+      - mongodb
+    networks:
+      - movies-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   # Frontend - Using http-server to serve production build
   frontend:
@@ -107,6 +128,9 @@ services:
     container_name: movies-frontend
     environment:
         CALIFICATIONS_URL: http://calificacion:3003
+        RECOMMEND_URL: http://recomendations:5000
+        MOVIES_URL: http://movies:3002
+        RANDOM_URL: http:// random-movies:3001
     ports:
       - "80:8080"  # Expose http-server on port 80
     restart: unless-stopped

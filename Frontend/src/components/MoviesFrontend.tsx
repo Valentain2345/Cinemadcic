@@ -6,10 +6,11 @@ if (import.meta.hot) {
 
 import { useState, useEffect } from 'react';
 import styled, { keyframes } from 'styled-components';
-import { Star, Film, Loader2, ThumbsUp, RefreshCw } from 'lucide-react';
+import { Star, Film, Loader2, ThumbsUp, RefreshCw,ThumbsDown } from 'lucide-react';
+import { v4 as uuidv4 } from 'uuid';
 
 interface Movie {
-  id: number;
+  id: number; // primary id used in frontend
   title: string;
   plot: string;
   fullplot?: string;
@@ -22,10 +23,26 @@ interface Movie {
   poster?: string;
   rating?: number;
   tomatoes?: {
-    viewer?: { rating?: number };
+    viewer?: { rating?: number; numReviews?: number };
     critic?: { rating?: number };
+    dvd?: string;
+    lastUpdated?: string;
   };
+  _id?: string;
+  imdb?: { id?: number; rating?: number; votes?: number };
+  awards?: {
+    wins?: number;
+    nominations?: number;
+    text?: string;
+  };
+  countries?: string[];
+  rated?: string;
+  released?: string;
+  type?: string;
+  lastupdated?: string;
+  num_mflix_comments?: number;
 }
+
 
 
 // Keyframes
@@ -297,27 +314,39 @@ const CloseButton = styled.button`
   }
 `;
 
-// Notification
-const slideIn = keyframes`
-  from { transform: translateX(100%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
-`;
 
-const Notification = styled.div`
+interface NotificationProps {
+  $isError?: boolean;   // the transient prop (starts with $)
+}
+
+const Notification = styled.div<NotificationProps>`
   position: fixed;
-  top: 5rem;
-  right: 1.5rem;
-  background: linear-gradient(to right, #10b981, #059669);
-  color: white;
-  padding: 1rem 1.5rem;
-  border-radius: 0.75rem;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: ${({ $isError }) => ($isError ? '#fee2e2' : '#ecfdf5')};
+  color: ${({ $isError }) => ($isError ? '#dc2626' : '#059669')};
+  border: 1px solid ${({ $isError }) => ($isError ? '#fecaca' : '#bbf7d0')};
+  border-radius: 8px;
+  padding: 0.75rem 1.25rem;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  box-shadow: 0 10px 25px rgba(16, 185, 129, 0.3);
-  z-index: 60;
-  animation: ${slideIn} 0.4s ease-out;
+  gap: 0.5rem;
   font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  animation: slideDown 0.3s ease-out;
+
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateX(-50%) translateY(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  }
 `;
 
 // Loader
@@ -412,21 +441,167 @@ const CancelButton = styled(CloseButton)`
   }
 `;
 
+const SearchWrapper = styled.div`
+  margin-top: 1rem;
+  width: 100%;
+  max-width: 450px;
+  position: relative;
+`;
+
+const SearchInput = styled.input`
+  width: 100%;
+  background: rgba(30, 41, 59, 0.65);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  padding: 0.75rem 1rem 0.75rem 2.8rem;
+  border-radius: 0.75rem;
+  color: #e2e8f0;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
+
+  &:focus {
+    outline: none;
+    border-color: #60a5fa;
+    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.25);
+  }
+
+  &::placeholder {
+    color: #64748b;
+  }
+`;
+
+const SearchIconWrapper = styled.div`
+  position: absolute;
+  top: 50%;
+  left: 0.9rem;
+  transform: translateY(-50%);
+  color: #64748b;
+`;
+
+const ClearButton = styled.button`
+  position: absolute;
+  top: 50%;
+  right: 0.9rem;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 1.1rem;
+
+  &:hover {
+    color: #cbd5e1;
+  }
+`;
+
+
+
 export default function MoviesFrontend() {
   const [movies, setMovies] = useState<Movie[]>([]);
+  const [recommended, setRecommended] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
   const [userRatings, setUserRatings] = useState<{ [key: number]: number }>({});
   const [notification, setNotification] = useState<string>('');
   const [movieComment,setMovieComment]=useState<string>("");
   const [tempRating, setTempRating] = useState<number>(0);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [isGoodNotification,setIsGoodNotification]=useState(true);
+  const userId: string = getUserId();
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+    }, 300);
+
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
+const fetchRecommendedMovies = async () => {
+  try {
+    setLoading(true);
+
+    const recommendURL = process.env.RECOMMEND_URL || "http://localhost:5000";
+    const response = await fetch(recommendURL + `/recommend/${userId}`);
+
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+    const recommendedMoviesResponse = await response.json();
+    console.log("API response:", recommendedMoviesResponse);
+
+    const recommendedMovies: Movie[] = recommendedMoviesResponse.recommendations || [];
 
 
- useEffect(() => {
+    const normalizedMovies = normalizeAndDeduplicateMovies(recommendedMovies);
+
+    // Filter out duplicates against already loaded movies
+    const uniqueRecommended = filterUniqueMovies(movies, normalizedMovies);
+
+    setRecommended(uniqueRecommended);
+
+  } catch (error) {
+    console.error("Error fetching recommended movies:", error);
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+const searchMovies = async (query: string) => {
+  if (query.trim().length < 2) {
+    setIsSearching(false);
+    setMovies([]);
+    fetchRandomMovies();
+    setLoading(false);
+    return;
+  }
+
+  try {
+    setLoading(true);
+    setIsSearching(true);
+    const moviesUrl = process.env.MOVIES_URL || "http://localhost:3002";
+    const response = await fetch(
+      moviesUrl + `/api/movies/search?q=${encodeURIComponent(query)}`
+    );
+
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+    const moviesDB: any[] = await response.json();
+
+   const normalizedMovies = normalizeAndDeduplicateMovies(moviesDB, movies);
+
+    // Filter out duplicates against already loaded movies
+    const uniqueSearchResults = filterUniqueMovies(movies, normalizedMovies);
+
+    setMovies(uniqueSearchResults);
+
+  } catch (err) {
+    console.error("Search error:", err);
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+useEffect(() => {
+  if (debouncedQuery.trim() === "") {
+    // reset to random movies
+     setMovies([])
+    fetchRandomMovies();
+    setIsSearching(false);
+    setLoading(false);
+    return;
+  }
+
+  searchMovies(debouncedQuery);
+}, [debouncedQuery]);
+
+useEffect(() => {
   const handleScroll = () => {
+    if (isSearching) return;
+
     const bottom =
-      window.innerHeight + window.scrollY >=
-      document.body.offsetHeight - 200;
+      window.innerHeight + window.scrollY >= document.body.offsetHeight - 200;
 
     if (bottom && !loading) {
       loadMoreMovies();
@@ -435,8 +610,17 @@ export default function MoviesFrontend() {
 
   window.addEventListener("scroll", handleScroll);
   return () => window.removeEventListener("scroll", handleScroll);
-}, []); // IMPORTANT: empty dependency array
+}, [isSearching]);
 
+
+useEffect(() => {
+  if (notification) {
+    const timer = setTimeout(() => {
+      setNotification('');
+    }, 3000);
+    return () => clearTimeout(timer);
+  }
+}, [notification]);
 
 const loadMoreMovies = async () => {
   try {
@@ -445,11 +629,11 @@ const loadMoreMovies = async () => {
     const existingIds = new Set(movies.map((m) => m.id));
 
     let uniqueNewMovies: Movie[] = [];
-
-    // Try up to 5 times to get unique movies
+     const randomMoviesURL= process.env.RANDOM_URL || "http://localhost:3001"
     for (let i = 0; i < 5 && uniqueNewMovies.length === 0; i++) {
+
       const response = await fetch(
-        `http://localhost:3001/random-movies?count=5`
+        randomMoviesURL+`/random-movies?count=5`
       );
       const fetched: Movie[] = await response.json();
 
@@ -458,7 +642,7 @@ const loadMoreMovies = async () => {
 
     // Add unique movies to the end
     if (uniqueNewMovies.length > 0) {
-      setMovies(prev => [...prev, ...uniqueNewMovies]);
+      setMovies(prev => [...prev, ...normalizeAndDeduplicateMovies(uniqueNewMovies, prev)]);
     } else {
       console.warn("No new unique movies found after several attempts.");
     }
@@ -470,55 +654,98 @@ const loadMoreMovies = async () => {
   }
 };
 
+const fetchRandomMovies = async (count = 7) => {
+  setLoading(true);
+  try {
+    const randomMoviesURL = process.env.RANDOM_URL || "http://localhost:3001";
 
-  const fetchRandomMovies = async (count = 7) => {
-    setLoading(true);
-    try {
-     const response = await fetch(
-      `http://localhost:3001/random-movies?count=${count}`
-    );
+    const response = await fetch(`${randomMoviesURL}/random-movies?count=${count}`);
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    const moviesDB = await response.json();
-    setMovies(moviesDB);
-    } catch (error) {
-      console.error('Error fetching movies:', error);
-    } finally {
-      setLoading(false);
+    const moviesDB: any[] = await response.json();
+
+    // Deduplicate against existing movies
+    const existingKeys = new Set(
+      movies.map(m => m.imdb?.id || `${m.title}-${m.year}`)
+    );
+
+    const normalizedMovies: Movie[] = [];
+
+    for (const movie of moviesDB) {
+      const key = movie.imdb?.id || `${movie.title}-${movie.year}`;
+      if (existingKeys.has(key)) continue; // skip duplicates
+      existingKeys.add(key);
+
+      const id = movie.imdb?.id
+        ? Number(movie.imdb.id)
+        : movie._id
+          ? parseInt(movie._id.substring(0, 8), 16)
+          : Date.now() + Math.floor(Math.random() * 1000);
+
+      normalizedMovies.push({
+        ...movie,
+        id,
+      });
     }
-  };
 
-  // Reemplaza la función submitRating con esta versión:
+    // Append to existing movies instead of replacing
+    setMovies(prev => [...prev, ...normalizedMovies]);
 
+  } catch (error) {
+    console.error("Error fetching movies:", error);
+  } finally {
+    setLoading(false);
+  }
+};
+
+// ──────────────────────────────────────────────────────────────────────
+//  submitRating  (inside MoviesFrontend component)
+// ──────────────────────────────────────────────────────────────────────
 const submitRating = async (movieId: number, rating: number) => {
+  // NEW: we need the movie object to get title & year
+  let movie = selectedMovie ?? movies.find(m => m.id === movieId);
+
+  if(!movie)
+    movie = selectedMovie ?? recommended.find(m => m.id === movieId);
+
+  if (!movie) {
+    showNotification('No se encontró la película');
+    return;
+  }
+
   try {
-    const calificationsurl=process.env.CALIFICATIONS_URL ||"http://localhost:3003";
-    const response = await fetch( calificationsurl+'/rate', {
+    setIsGoodNotification(true);
+    const calificationsurl = process.env.CALIFICATIONS_URL || "http://localhost:3003";
+
+    const payload = {
+      userId,
+      movieId,
+      movieName: movie.title,      // ← NEW
+      year: movie.year,            // ← NEW
+      rating,
+      comment: movieComment || '',
+    };
+
+    console.log('Submitting rating:', payload);
+
+    const response = await fetch(calificationsurl + '/rate', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        userId: 1,
-        movieId,
-        rating,
-        comment: movieComment || '',
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
     });
 
     const data = await response.json();
-
     if (!response.ok) {
+      setIsGoodNotification(false);
       throw new Error(data.error || 'Error al enviar calificación');
     }
 
-    setUserRatings((prev) => ({ ...prev, [movieId]: rating }));
+    setUserRatings(prev => ({ ...prev, [movieId]: rating }));
     showNotification('¡Calificación enviada exitosamente!');
-    handleCloseModal(); // Cerrar modal después de enviar
-
+    handleCloseModal();
     console.log('[Frontend] Rating sent successfully:', data);
   } catch (error) {
     console.error('[Frontend] Error submitting rating:', error);
@@ -534,14 +761,67 @@ const handleCloseModal = () => {
 
 
 
-  const showNotification = (message: string) => {
+const showNotification = (message: string) => {
     setNotification(message);
     setTimeout(() => setNotification(''), 3000);
   };
 
-  useEffect(() => {
+ useEffect(() => {
     fetchRandomMovies();
-  }, []);
+    fetchRecommendedMovies();
+  }, []); // This effect runs once when the page loads
+
+
+
+
+function getUserId(): string {
+  let uid = localStorage.getItem("user_id");
+  if (!uid) {
+    uid = uuidv4();
+    localStorage.setItem("user_id", uid);
+  }
+  return uid;
+}
+
+const filterUniqueMovies = (existingMovies: Movie[], newMovies: Movie[]): Movie[] => {
+  const existingIds = new Set(existingMovies.map(m => m.id));
+
+  return newMovies.filter(m => !existingIds.has(m.id));
+};
+
+function normalizeAndDeduplicateMovies(movies: any[], existingMovies: Movie[] = []): Movie[] {
+  const existingKeys = new Set(
+    existingMovies.map(m => m.imdb?.id || `${m.title}-${m.year}`)
+  );
+
+  const normalized: Movie[] = [];
+
+  for (const movie of movies) {
+    // Unique key: prefer imdb.id, fallback to title-year
+    const key = movie.imdb?.id || `${movie.title}-${movie.year}`;
+
+    if (existingKeys.has(key)) continue; // skip duplicates
+    existingKeys.add(key);
+
+    const id = movie.imdb?.id
+      ? Number(movie.imdb.id)
+      : movie._id
+        ? parseInt(movie._id.substring(0, 8), 16)
+        : Date.now() + Math.floor(Math.random() * 1000);
+
+    normalized.push({
+      ...movie,
+      id,
+    });
+  }
+
+  return normalized;
+}
+
+
+
+console.log("User ID:", userId);
+
 
  // Reemplaza tu componente StarRating con este:
 
@@ -613,27 +893,99 @@ const StarRating = ({
         <HeaderContent>
           <Film className="text-blue-400" size={36} />
           <div>
-            <Title>MovieStream</Title>
+            <Title>CinemaDcic</Title>
             <Subtitle>Descubre y califica las mejores películas</Subtitle>
           </div>
+          <SearchWrapper>
+            <SearchIconWrapper>
+              <svg width="20" height="20" fill="currentColor">
+                <path d="M11 2a9 9 0 016.32 15.32l4.18 4.18-1.42 1.42-4.18-4.18A9 9 0 1111 2zm0 2a7 7 0 100 14 7 7 0 000-14z" />
+              </svg>
+            </SearchIconWrapper>
+
+            <SearchInput
+              placeholder="Buscar películas..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+
+            {searchQuery.length > 0 && (
+              <ClearButton onClick={() => setSearchQuery('')}>
+                ×
+              </ClearButton>
+            )}
+          </SearchWrapper>
+
         </HeaderContent>
       </Header>
     </div>
 
     {notification && (
-      <Notification>
-        <ThumbsUp size={20} />
-        {notification}
+      <Notification $isError={!isGoodNotification}>
+        {isGoodNotification ? (
+          <ThumbsUp size={20} className="text-green-400" />
+        ) : (
+          <ThumbsDown size={20} className="text-red-400" />
+        )}
+        <span>{notification}</span>
       </Notification>
     )}
-
     {/* Centered content */}
     <Main>
+{!isSearching && (
      <div
   className="flex justify-between items-center"
   style={{ marginBottom: "1.75rem" }}
 >
-   <SectionTitle>Películas Aleatorias</SectionTitle>
+
+<div style={{ marginBottom: "2rem" }}>
+<SectionTitle>Películas Recomendadas</SectionTitle>
+ <MoviesGrid>
+    {recommended.map((movie) => (
+      <MovieCard key={movie.id} onClick={() => setSelectedMovie(movie)}>
+        <CardImage
+          style={{
+            backgroundImage: movie.poster ? `url(${movie.poster})` : undefined,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+          }}
+        >
+          {!movie.poster && <Film size={64} className="text-white/40" />}
+        </CardImage>
+
+        <CardContent>
+          <MovieTitle>{movie.title}</MovieTitle>
+
+          <Tags>
+            <Tag color="blue">{movie.year}</Tag>
+            {movie.genres?.slice(0, 2).map((g) => (
+              <Tag key={g} color="purple">{g}</Tag>
+            ))}
+          </Tags>
+
+          <Plot>{movie.plot}</Plot>
+
+          {movie.directors?.length && (
+            <RatingLabel>Dirigida por: {movie.directors.join(", ")}</RatingLabel>
+          )}
+
+          {movie.cast?.length && (
+            <RatingLabel>
+              Reparto: {movie.cast.slice(0, 3).join(", ")}
+              {movie.cast.length > 3 ? "…" : ""}
+            </RatingLabel>
+          )}
+
+          <RatingLabel>Tu calificación:</RatingLabel>
+          <StarRating movieId={movie.id} currentRating={movie.rating} mode="auto" />
+        </CardContent>
+      </MovieCard>
+    ))}
+  </MoviesGrid>
+</div>
+
+<SectionTitle>Películas Aleatorias</SectionTitle>
+
         <RefreshButton onClick={() => fetchRandomMovies(7)} disabled={loading}>
           {loading ? (
             <>
@@ -648,8 +1000,7 @@ const StarRating = ({
           )}
         </RefreshButton>
       </div>
-
-
+)}
         <MoviesGrid>
   {movies.map((movie) => (
     <MovieCard key={movie.id} onClick={() => setSelectedMovie(movie)}>

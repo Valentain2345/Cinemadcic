@@ -37,11 +37,11 @@ async function connectRabbitMQ() {
     setTimeout(connectRabbitMQ, 5000);
   }
 }
-
 // Endpoint para recibir calificaciones
 app.post('/rate', async (req, res) => {
   try {
-    const { userId, movieId,movieName, rating, comment } = req.body;
+    // NEW fields
+    const { userId, movieId, movieName, year, rating, comment } = req.body;
 
     // Validaciones
     if (!userId || !movieId || rating === undefined) {
@@ -49,7 +49,6 @@ app.post('/rate', async (req, res) => {
         error: 'Faltan parámetros requeridos: userId, movieId, rating'
       });
     }
-
     if (rating < 1 || rating > 5) {
       return res.status(400).json({
         error: 'La calificación debe estar entre 1 y 5'
@@ -60,6 +59,8 @@ app.post('/rate', async (req, res) => {
     const calificacion = {
       userId,
       movieId,
+      movieName,      // ← NEW
+      year,           // ← NEW
       rating,
       comment: comment || '',
       timestamp: new Date().toISOString()
@@ -67,12 +68,7 @@ app.post('/rate', async (req, res) => {
 
     console.log('[Calificacion] Nueva calificación recibida:', calificacion);
 
-    // Verificar que el canal esté disponible
-    if (!channel) {
-      throw new Error('No hay conexión con RabbitMQ');
-    }
-
-    // Enviar mensaje a RabbitMQ
+    // … (RabbitMQ part unchanged) …
     const message = JSON.stringify(calificacion);
     channel.sendToQueue(
       QUEUE_NAME,
@@ -80,14 +76,11 @@ app.post('/rate', async (req, res) => {
       { persistent: true }
     );
 
-    console.log('[Calificacion] Calificación enviada a RabbitMQ');
-
     res.status(201).json({
       success: true,
       message: 'Calificación procesada exitosamente',
       data: calificacion
     });
-
   } catch (error) {
     console.error('[Calificacion] Error procesando calificación:', error.message);
     res.status(500).json({

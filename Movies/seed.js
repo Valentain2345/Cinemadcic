@@ -3,12 +3,12 @@
 import { MongoClient } from "mongodb";
 
 const uri = "mongodb+srv://user:DCD-QWeNg1Z0N2cl7ctZ43@fer-dcd.uhrlcun.mongodb.net/";          // source database URI
-const targetUri = process.env.MONGO_URI||"mongodb://localhost:27017/movies";    // target database URI
+const targetUri = process.env.MONGO_URI||"mongodb://localhost:27017/moviesdb";    // target database URI
 
 const sourceDbName = "sample_mflix";        // origin DB name
 const sourceCollectionName = "movies";      // origin collection
 
-const targetDbName = "movies";              // NEW database name
+const targetDbName = "moviesdb";              // NEW database name
 const targetCollectionName = "movies";      // NEW collection name
 
 async function main() {
@@ -56,6 +56,12 @@ async function main() {
     // Ensure empty collection
     await targetCollection.deleteMany({});
     console.log("🗑 Colección destino limpiada");
+    try {
+      await targetCollection.dropIndex("id_1");
+      console.log("✔ Índice 'id_1' eliminado (para permitir id: null duplicados)");
+    } catch (err) {
+      if (err.codeName !== 'IndexNotFound') throw err;
+    }
 
     // ------------------------------
     // INSERT MOVIES
