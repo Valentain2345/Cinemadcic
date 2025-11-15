@@ -26,7 +26,7 @@ app = Flask(__name__)
 # ----------------------------------------------------------------------
 # MongoDB Connection with Logging
 # ----------------------------------------------------------------------
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/movies")
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/moviesdb")
 log.info(f"Attempting to connect to MongoDB at: {MONGO_URI}")
 
 try:
@@ -37,7 +37,7 @@ except ServerSelectionTimeoutError as e:
     log.critical(f"MongoDB connection FAILED: {e}")
     raise
 
-db = client["movies"]
+db = client["moviesdb"]
 movies = db["movies"]
 ratings = db["ratings"]
 
