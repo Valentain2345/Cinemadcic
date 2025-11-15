@@ -11,6 +11,9 @@ Before you begin, make sure Docker and Docker Compose are installed on your syst
 
 Once Docker is installed, proceed with the steps below.
 
+## 0. Go to the proyect folder
+  Enter the folder where the docker-compose.yaml file is
+
 ## 1. Build the Docker Images
 
 First, run the following command to build the Docker images for the application:
