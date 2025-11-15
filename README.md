@@ -48,9 +48,6 @@ Once everything is up and running, open your web browser and navigate to:
 
 You should see the application running.
 
-## 5. seeding some ratings or adding movies
-You can seed ratings in the db by running npm run seed in the opinions service and add movies with the endpoint of the movies-service api/movies to post data each movie has this format id, title, plot, year, genre, director, you can post rating in the app
-
 ---
 
 ### Troubleshooting
